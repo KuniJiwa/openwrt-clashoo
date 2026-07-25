@@ -78,6 +78,7 @@
 - TCP / UDP / 网络栈分开配置
 - TCP 支持 Redirect / TProxy / TUN，UDP 支持 TProxy / TUN
 - TUN 网络栈支持 gVisor / System / Mixed，只有 TCP 或 UDP 选 TUN 时生效
+- 局域网 ACL 支持按 IPv4、IPv6、MAC 分组，并分别控制 DNS 接管和代理
 - 可禁用 QUIC GSO，也可按需阻断走代理的 UDP 443，让应用回落 TCP
 
 **系统与数据**

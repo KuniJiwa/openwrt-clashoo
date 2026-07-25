@@ -147,7 +147,7 @@ OpenClash / nikki / passwall 可能和 Clashoo 共用同名二进制（mihomo、
 
 | include 段 | 挂载位置 | 内容 |
 |------------|----------|------|
-| `clash_fw4_sets` | `table-pre` | 命名集合：本地网段、中国 IP（`clashoo_china/6`）、ACL 白/黑名单 |
+| `clash_fw4_sets` | `table-pre` | 命名集合：本地网段、中国 IP（`clashoo_china/6`）、旧版 ACL 集合和 TUN ACL 子链 |
 | `clash_fw4_dstnat` | `dstnat` 链 | DNS 劫持（53→53）+ redirect 模式的代理重定向 |
 | `clash_fw4_mangle` | `mangle_prerouting` 链 | TProxy 模式的 TCP/UDP 打标转发 |
 
@@ -171,15 +171,15 @@ OpenClash / nikki / passwall 可能和 Clashoo 共用同名二进制（mihomo、
 **透明代理模式如何落到规则**：
 - `redirect`：DSTNAT 链 `redirect to :redir_port`（默认 7891）。
 - `tproxy`（TCP/UDP）：mangle 链 `tproxy to :tproxy_port`（默认 7982）+ 打 `0x162` + `ip rule`/`ip route`。
-- `tun`：内核自己接管，nft 不加代理规则（仅留 DNS 劫持）；无 tun 设备时自动回落 redirect/tproxy。
+- `tun`：内核自己接管；启用分组 ACL 时 nft 只写分组匹配和直连绕过标记，无 tun 设备时自动回落 redirect/tproxy。
 - `tcp_mode`、`udp_mode` 和 `stack` 是独立字段；`stack` 只在 TCP 或 UDP 至少一个为 `tun` 时生效。常见组合：默认 `TCP Redirect + UDP TProxy + gVisor`，也可用 `TCP Redirect + UDP TUN + Mixed`，或 `TCP TUN + UDP TUN + System/Mixed/gVisor`。
 
-**绕行（bypass）**：本地网段、中国 IP（`bypass_china=1` 用内置 `geoip_cn.nft`）、ACL（`access_control` 1=白名单只代理 `proxy_lan_ips`、2=黑名单不代理 `reject_lan_ips`）、自定义端口（`bypass_port_mode`：all/common/custom）、DSCP、fwmark。DNS 劫持也遵守 ACL：白名单外或黑名单内的 LAN IP 不再被 53 端口劫持。**共存**：自动把 passwall(0x1)/passwall2(0xff)/nikki(tproxy/tun mark) 的标记并入 bypass，避免互相截流。
+**绕行（bypass）**：本地网段、中国 IP（`bypass_china=1` 用内置 `geoip_cn.nft`）、分组 ACL、自定义端口（`bypass_port_mode`：all/common/custom）、DSCP、fwmark。分组 ACL 按从上到下匹配，行内 IPv4、IPv6、MAC 任一命中即采用该组的 DNS 和代理开关；空匹配项代表全部设备，未命中默认接管 DNS 并走代理。旧白名单会迁移成“名单代理 + 其余直连”，旧黑名单会迁移成“名单直连 + 其余代理”。**共存**：自动把 passwall(0x1)/passwall2(0xff)/nikki(tproxy/tun mark) 的标记并入 bypass，避免互相截流。
 
 ### DNS 接管
 
 - **mihomo**：`enable_dns=1` 且 `dnsforwader=1` 时，`yml_dns_change` 把 dnsmasq 上游改成 `127.0.0.1#listen_port`（默认 1053）+ `noresolv=1`，原状存于 `/tmp/clashoo/dnsmasq_*.before`。`enable_dns=0` 时必须先还原 dnsmasq，避免强制 DNS 转发指向已关闭的核心 DNS 端口。配置里 `listen: 0.0.0.0:53` 会被改成 `listen_port`，避免和 dnsmasq 抢 53。
-- **sing-box**：`singbox_dns_change` 同理，但仅在 `dnsforwader=1` 时接管。
+- **sing-box**：普通模式下 `singbox_dns_change` 同理；启用分组 ACL 后 dnsmasq 保持真实上游，由 nft 按组把需要接管的 53 端口请求送入 sing-box DNS，绕过组继续使用真实 DNS。
 - **增强模式**：`enhanced_mode = fake-ip`（默认，配 `fake_ip_range 198.18.0.1/16` + `fake_ip_filter`）或 `redir-host`。
 - **安全网**：`ensure_dns_when_core_stopped` —— 内核停了，若 dnsmasq 只剩指向本地 Clashoo DNS，会自动补公共 DNS（119.29.29.29 / 223.5.5.5），避免断网。
 - **上游 DNS 注入**（`mixin.uc`，2026-07-14 起）：UCI 的 `dnsservers`（按 `ser_type` 分角色）/ `dns_policy` / `default_nameserver` 会注入 mihomo 的 `dns` 段。**在此之前 mihomo 完全没有 nameserver**，回落到内置国内 DNS（`doh.pub` / `tls://223.5.5.5:853`），境外域名解析成污染 IP。
