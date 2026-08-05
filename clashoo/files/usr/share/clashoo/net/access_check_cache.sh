@@ -120,7 +120,6 @@ tcp_mode="$(uci -q get clashoo.config.tcp_mode)"
 [ -z "$tcp_mode" ] && tcp_mode="redirect"
 udp_mode="$(uci -q get clashoo.config.udp_mode)"
 [ -z "$udp_mode" ] && udp_mode="$tcp_mode"
-updated_at="$(date +%s)"
 
 proxy_listening() {
 	# 检测 mixed-port 是否在 LISTEN（clashoo 未运行时立即标 proxy down，避免显示假绿）
@@ -156,6 +155,8 @@ direct_youtube="$(cat "$f_dy" 2>/dev/null)"
 proxy_bytedance="$(cat "$f_pb" 2>/dev/null)"
 proxy_youtube="$(cat "$f_py" 2>/dev/null)"
 rm -f "$f_db" "$f_dy" "$f_pb" "$f_py"
+
+updated_at="$(date +%s)"
 
 log_diag "port=${proxy_port} proxy_skipped=${proxy_skipped} direct_bd=[${direct_bytedance}] direct_yt=[${direct_youtube}] proxy_bd=[${proxy_bytedance}] proxy_yt=[${proxy_youtube}]"
 
