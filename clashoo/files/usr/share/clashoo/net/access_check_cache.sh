@@ -16,6 +16,11 @@ take_lock() {
 	return 0
 }
 
+pid_is_cache_worker() {
+	[ -r "/proc/$1/cmdline" ] || return 1
+	tr '\0' ' ' <"/proc/$1/cmdline" 2>/dev/null | grep -q 'access_check_cache\.sh'
+}
+
 lock_is_dead() {
 	_pid="$(cat "$LOCK_PID_FILE" 2>/dev/null)"
 	case "$_pid" in
@@ -24,7 +29,8 @@ lock_is_dead() {
 			return $?
 			;;
 	esac
-	[ ! -d "/proc/$_pid" ]
+	[ ! -d "/proc/$_pid" ] && return 0
+	! pid_is_cache_worker "$_pid"
 }
 
 mkdir -p "$CACHE_DIR"
