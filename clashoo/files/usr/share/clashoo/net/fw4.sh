@@ -803,6 +803,15 @@ apply_rules() {
 			ip rule add fwmark "$PROXY_FWMARK" table "$PROXY_ROUTE_TABLE" >/dev/null 2>&1 || true
 		ip route show table "$PROXY_ROUTE_TABLE" 2>/dev/null | grep -q 'local 0.0.0.0/0 dev lo' ||
 			ip route add local 0.0.0.0/0 dev lo table "$PROXY_ROUTE_TABLE" >/dev/null 2>&1 || true
+		if bool_enabled "$(config_ipv6_proxy)"; then
+			ip -6 rule show 2>/dev/null | grep -q "fwmark ${PROXY_FWMARK}.*lookup ${_route_table_dec}" ||
+				ip -6 rule add fwmark "$PROXY_FWMARK" table "$PROXY_ROUTE_TABLE" >/dev/null 2>&1 || true
+			ip -6 route show table "$PROXY_ROUTE_TABLE" 2>/dev/null | grep -q 'local default dev lo' ||
+				ip -6 route add local ::/0 dev lo table "$PROXY_ROUTE_TABLE" >/dev/null 2>&1 || true
+		else
+			ip -6 rule del fwmark "$PROXY_FWMARK" table "$PROXY_ROUTE_TABLE" >/dev/null 2>&1 || true
+			ip -6 route del local ::/0 dev lo table "$PROXY_ROUTE_TABLE" >/dev/null 2>&1 || true
+		fi
 	else
 		remove_firewall_include clash_fw4_mangle
 	fi
@@ -825,6 +834,8 @@ remove_rules() {
 	rm -f "$SETS_RULES" "$DSTNAT_RULES" "$OUTPUT_RULES" "$MANGLE_RULES"
 	ip rule del fwmark "$PROXY_FWMARK" table "$PROXY_ROUTE_TABLE" >/dev/null 2>&1 || true
 	ip route del local 0.0.0.0/0 dev lo table "$PROXY_ROUTE_TABLE" >/dev/null 2>&1 || true
+	ip -6 rule del fwmark "$PROXY_FWMARK" table "$PROXY_ROUTE_TABLE" >/dev/null 2>&1 || true
+	ip -6 route del local ::/0 dev lo table "$PROXY_ROUTE_TABLE" >/dev/null 2>&1 || true
 	/etc/init.d/firewall restart >/dev/null 2>&1 || /etc/init.d/firewall reload >/dev/null 2>&1 || true
 }
 
