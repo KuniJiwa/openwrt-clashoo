@@ -827,6 +827,10 @@ apply_rules() {
 		fi
 	else
 		remove_firewall_include clash_fw4_mangle
+		ip rule del fwmark "$PROXY_FWMARK" table "$PROXY_ROUTE_TABLE" >/dev/null 2>&1 || true
+		ip route del local 0.0.0.0/0 dev lo table "$PROXY_ROUTE_TABLE" >/dev/null 2>&1 || true
+		ip -6 rule del fwmark "$PROXY_FWMARK" table "$PROXY_ROUTE_TABLE" >/dev/null 2>&1 || true
+		ip -6 route del local ::/0 dev lo table "$PROXY_ROUTE_TABLE" >/dev/null 2>&1 || true
 	fi
 	/etc/init.d/firewall restart >/dev/null 2>&1 || /etc/init.d/firewall reload >/dev/null 2>&1 || true
 	apply_acl_bypass_rules
