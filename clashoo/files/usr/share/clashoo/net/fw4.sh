@@ -155,6 +155,16 @@ config_bypass_china() {
 	uci_get clashoo.config.bypass_china
 }
 
+config_bypass_china_ipv6() {
+	local value
+	value="$(uci_get clashoo.config.bypass_china_ipv6)"
+	if [ -n "$value" ]; then
+		printf '%s\n' "$value"
+	else
+		config_bypass_china
+	fi
+}
+
 config_block_quic() {
 	uci_get clashoo.config.block_quic
 }
@@ -635,7 +645,7 @@ append_set_from_file_or_empty() {
 
 generate_rules() {
 	local redir_port tproxy_port tcp_mode udp_mode access_control fake_ip_range proxy_lan_ips reject_lan_ips
-	local proxy_tcp_dport proxy_udp_dport bypass_dscp bypass_fwmark
+	local proxy_tcp_dport proxy_udp_dport bypass_dscp bypass_fwmark bypass_china bypass_china_ipv6
 	local acl_catchall=0
 	redir_port="$(config_redir_port)"
 	tproxy_port="$(config_tproxy_port)"
@@ -644,6 +654,7 @@ generate_rules() {
 	access_control="$(config_access_control)"
 	grouped_acl_enabled && acl_has_catchall && acl_catchall=1
 	bypass_china="$(config_bypass_china)"
+	bypass_china_ipv6="$(config_bypass_china_ipv6)"
 	proxy_tcp_dport="$(config_proxy_tcp_dport)"
 	proxy_udp_dport="$(config_proxy_udp_dport)"
 	bypass_dscp="$(config_bypass_dscp)"
@@ -713,7 +724,7 @@ generate_rules() {
 			tcp_match="$(render_port_match tcp "$proxy_tcp_dport")"
 			cat >> "$DSTNAT_RULES" <<EOF
 $( render_common_returns )
-$( bool_enabled "$bypass_china" && printf '%s\n' 'ip6 daddr @clashoo_china6 return' )
+$( bool_enabled "$bypass_china_ipv6" && printf '%s\n' 'ip6 daddr @clashoo_china6 return' )
 $( bool_enabled "$bypass_china" && printf '%s\n' 'ip daddr @clashoo_china return' )
 $( [ -n "$dscp_elements" ] && printf '%s\n' "ip dscp { ${dscp_elements} } return" )
 $( [ -n "$dscp_elements" ] && printf '%s\n' "ip6 dscp { ${dscp_elements} } return" )
@@ -743,8 +754,10 @@ EOF
 		udp_match="$(render_port_match udp "$proxy_udp_dport")"
 		{
 			render_common_returns
-			if bool_enabled "$bypass_china"; then
+			if bool_enabled "$bypass_china_ipv6"; then
 				printf 'meta nfproto ipv6 ip6 daddr @clashoo_china6 return\n'
+			fi
+			if bool_enabled "$bypass_china"; then
 				printf 'ip daddr @clashoo_china return\n'
 			fi
 			if [ -n "$dscp_elements" ]; then
