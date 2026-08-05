@@ -174,7 +174,7 @@ OpenClash / nikki / passwall 可能和 Clashoo 共用同名二进制（mihomo、
 - `tun`：内核自己接管；启用分组 ACL 时 nft 只写分组匹配和直连绕过标记，无 tun 设备时自动回落 redirect/tproxy。
 - `tcp_mode`、`udp_mode` 和 `stack` 是独立字段；`stack` 只在 TCP 或 UDP 至少一个为 `tun` 时生效。常见组合：默认 `TCP Redirect + UDP TProxy + gVisor`，也可用 `TCP Redirect + UDP TUN + Mixed`，或 `TCP TUN + UDP TUN + System/Mixed/gVisor`。
 
-**绕行（bypass）**：本地网段、中国 IP（`bypass_china=1` 用内置 `geoip_cn.nft`）、分组 ACL、自定义端口（`bypass_port_mode`：all/common/custom）、DSCP、fwmark。分组 ACL 按从上到下匹配，行内 IPv4、IPv6、MAC 任一命中即采用该组的 DNS 和代理开关；空匹配项代表全部设备，未命中默认接管 DNS 并走代理。旧白名单会迁移成“名单代理 + 其余直连”，旧黑名单会迁移成“名单直连 + 其余代理”。**共存**：自动把 passwall(0x1)/passwall2(0xff)/nikki(tproxy/tun mark) 的标记并入 bypass，避免互相截流。
+**绕行（bypass）**：本地网段、中国 IP（`bypass_china=1` 控制 IPv4 `geoip_cn.nft`，`bypass_china_ipv6=1` 控制 IPv6 `geoip6_cn.nft`；IPv6 字段缺失时回退旧 `bypass_china`）、分组 ACL、自定义端口（`bypass_port_mode`：all/common/custom）、DSCP、fwmark。分组 ACL 按从上到下匹配，行内 IPv4、IPv6、MAC 任一命中即采用该组的 DNS 和代理开关；空匹配项代表全部设备，未命中默认接管 DNS 并走代理。旧白名单会迁移成“名单代理 + 其余直连”，旧黑名单会迁移成“名单直连 + 其余代理”。**共存**：自动把 passwall(0x1)/passwall2(0xff)/nikki(tproxy/tun mark) 的标记并入 bypass，避免互相截流。
 
 ### DNS 接管
 
