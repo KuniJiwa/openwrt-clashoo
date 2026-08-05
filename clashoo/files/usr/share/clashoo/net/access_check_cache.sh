@@ -8,6 +8,7 @@ LOCK_DIR="${CACHE_DIR}/access_check.lock"
 LOCK_PID_FILE="${LOCK_DIR}/pid"
 UPDATING_FLAG="${CACHE_DIR}/access_check_updating"
 TMP_FILE="${CACHE_FILE}.tmp.$$"
+DIAG_LOG="/tmp/clashoo_access_check.log"
 
 take_lock() {
 	mkdir "$LOCK_DIR" 2>/dev/null || return 1
@@ -89,15 +90,21 @@ probe_json() {
 		"$_ok_bool" "$_state" "$_code" "$_ok" "$_attempts" "$_loss" "$_avg_ms"
 }
 
+log_diag() {
+	[ "$(uci -q get clashoo.config.access_check_debug)" = "1" ] || return 0
+	_line="$(date '+%Y-%m-%d %H:%M:%S') $1"
+	printf '%s\n' "$_line" >>"$DIAG_LOG" 2>/dev/null
+	_n="$(wc -l <"$DIAG_LOG" 2>/dev/null || echo 0)"
+	if [ "${_n:-0}" -gt 200 ]; then
+		tail -n 100 "$DIAG_LOG" >"${DIAG_LOG}.tmp" 2>/dev/null && mv "${DIAG_LOG}.tmp" "$DIAG_LOG" 2>/dev/null
+	fi
+}
+
 probe_run() {
 	_url="$1"
 	_mode="$2"
 	# nice + ionice：探测 IO/CPU 都低优先级，避免抢占 LuCI dispatcher
 	nice -n 19 /usr/share/clashoo/net/access_check.sh "$_url" "$_mode" 2>/dev/null || true
-}
-
-has_wan_route() {
-	ip route get 1.1.1.1 >/dev/null 2>&1
 }
 
 proxy_port="$(uci -q get clashoo.config.mixed_port)"
@@ -120,34 +127,31 @@ proxy_listening() {
 	fi
 }
 
-if has_wan_route; then
-	# 并行探测，把 CPU 抢占窗口从串行 2s+ 压缩到最慢一路的耗时
-	f_db="${TMP_FILE}.db"
-	f_dy="${TMP_FILE}.dy"
-	f_pb="${TMP_FILE}.pb"
-	f_py="${TMP_FILE}.py"
-	probe_run "https://www.douyin.com/generate_204" "direct" >"$f_db" &
-	probe_run "https://www.youtube.com/generate_204" "direct" >"$f_dy" &
-	if proxy_listening; then
-		probe_run "https://www.douyin.com/generate_204" "proxy"  >"$f_pb" &
-		probe_run "https://www.youtube.com/generate_204" "proxy"  >"$f_py" &
-	else
-		# 代理端口未监听（clashoo 已停止），跳过探测，直接标 down
-		echo "ok=0 attempts=1 loss=1 avg_ms=0 code=000" >"$f_pb"
-		echo "ok=0 attempts=1 loss=1 avg_ms=0 code=000" >"$f_py"
-	fi
-	wait
-	direct_bytedance="$(cat "$f_db" 2>/dev/null)"
-	direct_youtube="$(cat "$f_dy" 2>/dev/null)"
-	proxy_bytedance="$(cat "$f_pb" 2>/dev/null)"
-	proxy_youtube="$(cat "$f_py" 2>/dev/null)"
-	rm -f "$f_db" "$f_dy" "$f_pb" "$f_py"
+# 并行探测，把 CPU 抢占窗口从串行 2s+ 压缩到最慢一路的耗时
+f_db="${TMP_FILE}.db"
+f_dy="${TMP_FILE}.dy"
+f_pb="${TMP_FILE}.pb"
+f_py="${TMP_FILE}.py"
+probe_run "https://www.douyin.com/generate_204" "direct" >"$f_db" &
+probe_run "https://www.youtube.com/generate_204" "direct" >"$f_dy" &
+if proxy_listening; then
+	proxy_skipped=0
+	probe_run "https://www.douyin.com/generate_204" "proxy"  >"$f_pb" &
+	probe_run "https://www.youtube.com/generate_204" "proxy"  >"$f_py" &
 else
-	direct_bytedance="ok=0 attempts=1 loss=1 avg_ms=0 code=000"
-	direct_youtube="ok=0 attempts=1 loss=1 avg_ms=0 code=000"
-	proxy_bytedance="ok=0 attempts=1 loss=1 avg_ms=0 code=000"
-	proxy_youtube="ok=0 attempts=1 loss=1 avg_ms=0 code=000"
+	# 代理端口未监听（clashoo 已停止），跳过探测，直接标 down
+	proxy_skipped=1
+	echo "ok=0 attempts=1 loss=1 avg_ms=0 code=000" >"$f_pb"
+	echo "ok=0 attempts=1 loss=1 avg_ms=0 code=000" >"$f_py"
 fi
+wait
+direct_bytedance="$(cat "$f_db" 2>/dev/null)"
+direct_youtube="$(cat "$f_dy" 2>/dev/null)"
+proxy_bytedance="$(cat "$f_pb" 2>/dev/null)"
+proxy_youtube="$(cat "$f_py" 2>/dev/null)"
+rm -f "$f_db" "$f_dy" "$f_pb" "$f_py"
+
+log_diag "port=${proxy_port} proxy_skipped=${proxy_skipped} direct_bd=[${direct_bytedance}] direct_yt=[${direct_youtube}] proxy_bd=[${proxy_bytedance}] proxy_yt=[${proxy_youtube}]"
 
 cat >"$TMP_FILE" <<EOF
 {
