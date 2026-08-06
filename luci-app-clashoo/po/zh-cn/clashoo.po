@@ -993,8 +993,8 @@ msgstr "IPv6"
 msgid "MAC"
 msgstr "MAC"
 
-msgid "Rules are matched from top to bottom. Unmatched devices use DNS takeover and proxy by default."
-msgstr "规则按从上到下的顺序匹配；未命中的设备默认接管 DNS 并走代理。"
+msgid "Rules are matched from top to bottom. Unmatched devices use DNS takeover and proxy by default. A rule with IPv4, IPv6 and MAC all empty matches every device."
+msgstr "规则按从上到下的顺序匹配；未命中的设备默认接管 DNS 并走代理。IPv4、IPv6、MAC 全部留空的规则匹配所有设备。"
 
 msgid "Proxy Authentication"
 msgstr "代理认证"
