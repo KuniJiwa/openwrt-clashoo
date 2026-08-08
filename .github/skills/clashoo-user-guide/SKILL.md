@@ -176,6 +176,28 @@ OpenClash / nikki / passwall 可能和 Clashoo 共用同名二进制（mihomo、
 
 **绕行（bypass）**：本地网段、中国 IP（`bypass_china=1` 控制 IPv4 `geoip_cn.nft`，`bypass_china_ipv6=1` 控制 IPv6 `geoip6_cn.nft`；IPv6 字段缺失时回退旧 `bypass_china`）、分组 ACL、自定义端口（`bypass_port_mode`：all/common/custom）、DSCP、fwmark。分组 ACL 按从上到下匹配，行内 IPv4、IPv6、MAC 任一命中即采用该组的 DNS 和代理开关；空匹配项代表全部设备，未命中默认接管 DNS 并走代理。旧白名单会迁移成“名单代理 + 其余直连”，旧黑名单会迁移成“名单直连 + 其余代理”。**共存**：自动把 passwall(0x1)/passwall2(0xff)/nikki(tproxy/tun mark) 的标记并入 bypass，避免互相截流。
 
+### 三个 IPv6 / 绕过开关怎么选（回答用户提问用）
+
+| 开关 | UCI 字段 | 作用 |
+|---|---|---|
+| IPv6 DNS | `enable_ipv6` | 内核认不认 IPv6。写入 mihomo 的 `ipv6` 与 `dns.ipv6`。**关掉则凡是进代理的 v6 流量一律降级成 IPv4** |
+| 大陆 IPv4 绕过 | `bypass_china` | 国内 IPv4 目标在防火墙层直接放行，不进内核 |
+| 大陆 IPv6 绕过 | `bypass_china_ipv6` | 国内 IPv6 目标在防火墙层直接放行，不进内核 |
+
+**IPv6 DNS 必须开**（默认已是 `true`）。它关着而 `ipv6_proxy=1` 时，防火墙把 v6 交给内核、内核却不认 v6，境内外 IPv6 全部失效。
+
+**两个绕过必须同开或同关**，不要一开一关：混搭会让同一站点的 v4 走直连、v6 走代理，对外露出两个不同源地址。
+
+| | 都勾（默认） | 都不勾 |
+|---|---|---|
+| 国内流量 | 防火墙直连，省 CPU、延迟低 | 全进内核 |
+| 设备公网 IPv6 | 保留设备自己的 GUA | 由路由器代发 |
+| 分流依据 | GeoIP 地址段，CDN 可能误判 | 内核规则（域名级，更准） |
+| 面板日志/统计 | 看不到国内连接 | 完整 |
+| 适合 | 一般情况；大流量、在意设备 GUA | 低端设备 CPU 吃紧；需要完整统计 |
+
+**「都勾」成立的前提**：「Fake-IP 过滤域名」里要有 `rule-set:cn_domain`（默认带）。它让国内域名返回真实 IP，从而与游戏等下发的硬编码 IP 走同一条直连路径；缺了它国内域名会走 fake-ip 进内核，同一应用的连接被分到两条路上，端游可能偶发掉线。
+
 ### DNS 接管
 
 - **mihomo**：`enable_dns=1` 且 `dnsforwader=1` 时，`yml_dns_change` 把 dnsmasq 上游改成 `127.0.0.1#listen_port`（默认 1053）+ `noresolv=1`，原状存于 `/tmp/clashoo/dnsmasq_*.before`。`enable_dns=0` 时必须先还原 dnsmasq，避免强制 DNS 转发指向已关闭的核心 DNS 端口。配置里 `listen: 0.0.0.0:53` 会被改成 `listen_port`，避免和 dnsmasq 抢 53。
