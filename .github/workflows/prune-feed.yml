@@ -2,9 +2,8 @@ name: Prune feed (keep newest)
 
 # Trim duplicate package/firmware versions on the R2 feed so they stop piling up.
 # Keeps only the newest build of each package and firmware variant.
-# Does NOT touch the package index — the daily aggregate-feed run (04:37 UTC)
-# rebuilds and re-signs it; this job runs ~32 min earlier so the index refreshes
-# the same day with the pruned set.
+# Does NOT touch the package index, nor the aggregated <sdk>/<arch>/ trees that
+# carry it — only the per-project source feeds and the firmware tree.
 
 on:
   workflow_dispatch:
@@ -20,8 +19,9 @@ on:
   schedule:
     - cron: "5 4 * * *"   # daily 04:05 UTC (~12:05 Beijing), just before aggregate-feed
 
+# Shared with aggregate-feed: the two must never overlap on the bucket.
 concurrency:
-  group: prune-feed
+  group: feed-pipeline
   cancel-in-progress: false
 
 jobs:

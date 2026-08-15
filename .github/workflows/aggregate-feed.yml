@@ -5,9 +5,10 @@ on:
   schedule:
     - cron: '37 4 * * *'
 
+# Shared with prune-feed: the two must never overlap on the bucket.
 concurrency:
-  group: aggregate-unified-feed
-  cancel-in-progress: true
+  group: feed-pipeline
+  cancel-in-progress: false
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
@@ -58,6 +59,33 @@ jobs:
               find "$dir" -maxdepth 1 -type f \( -name '*.apk' -o -name '*.ipk' \) -exec cp -v {} "$target/" \;
             done
           done
+
+          # Two project feeds can ship the same package at different versions
+          # (jell trails daed, say). Keep only the highest per arch, so the
+          # index never lists a build that prune-feed later drops upstream.
+          find merged -type f \( -name '*.apk' -o -name '*.ipk' \) \
+          | awk '
+              function key(p,   n,seg,fn,dir,a,i,k,t) {
+                n = split(p, seg, "/"); fn = seg[n]
+                dir = ""; for (i = 1; i < n; i++) dir = dir seg[i] "/"
+                if (fn ~ /\.ipk$/) {
+                  n = split(fn, a, "_")
+                  if (n >= 3) { k = a[1]; for (i = 3; i <= n; i++) k = k "_" a[i]; return dir k }
+                  return dir fn
+                }
+                t = fn
+                sub(/\.apk$/, "", t)
+                sub(/-r[0-9]+$/, "", t)
+                sub(/-[^-]+$/, "", t)
+                return dir t
+              }
+              { print key($0) "\t" $0 }
+            ' \
+          | sort -t$'\t' -k1,1 -k2,2V \
+          | awk -F'\t' '
+              { if (NR > 1 && $1 == prevkey) print prevpath; prevkey = $1; prevpath = $2 }
+            ' \
+          | while IFS= read -r stale; do echo "superseded: $stale"; rm -f "$stale"; done
 
           find merged -type f | sort
           find merged -type f | grep -q . || { echo "No packages to aggregate"; exit 1; }

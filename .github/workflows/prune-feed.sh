@@ -5,10 +5,10 @@
 # so duplicate versions stop piling up. Operates directly on R2 via rclone — no
 # downloads. Run from GitHub Actions (see .github/workflows/prune-feed.yml).
 #
-# It NEVER touches the package index. The signed Packages/Packages.gz/Packages.sig
-# is rebuilt + re-signed by the daily aggregate-feed workflow (the usign key lives
-# in GH Secrets). This prune runs just before that, so a trimmed index self-heals
-# the same day.
+# It NEVER touches the package index, and never touches the aggregated
+# <sdk>/<arch>/ trees either: those are a mirror of whatever aggregate-feed
+# uploads, index included, and rclone sync already drops what is no longer
+# there. Only the per-project source feeds and the firmware tree are pruned.
 #
 # Env:
 #   REMOTE  rclone remote+bucket, e.g. r2:dllkids-openwrt-feed   (required)
@@ -21,8 +21,16 @@ REMOTE="${REMOTE:?set REMOTE, e.g. b2:bucket}"
 KEEP="${KEEP:-1}"
 DRY="${DRY:-1}"
 
-# Sub-paths under the bucket to clean.
-SUBDIRS=(openwrt-feed firmware)
+# Sub-paths under the bucket to clean: the firmware tree plus every per-project
+# source feed under openwrt-feed/ (anything not named like an SDK release, since
+# openwrt-feed/<sdk>/<arch>/ is aggregate-feed's mirror and is off limits).
+SUBDIRS=(firmware)
+while IFS= read -r d; do
+  d="${d%/}"
+  [ -n "$d" ] || continue
+  case "$d" in [0-9]*) continue ;; esac
+  SUBDIRS+=("openwrt-feed/$d")
+done < <(rclone lsf --dirs-only "$REMOTE/openwrt-feed/" 2>/dev/null || true)
 
 total_files=0
 total_bytes=0
@@ -38,9 +46,12 @@ prune_one() {
   fi
 
   # Compute a version/date-agnostic group key per file, then within each
-  # directory keep the newest KEEP and list the rest for deletion.
+  # directory keep the newest KEEP and list the rest for deletion. Packages rank
+  # by version, firmware images by upload time (their MM.DD prefix wraps at new
+  # year); KIND says which ranking a row takes.
   awk -F'\t' -v OFS='\t' '
     function key(dir, fn,   a,n,i,k,t) {
+      KIND = "pkg"
       # ipk:  name_version_arch.ipk  ->  drop the version (2nd "_" field).
       # pkg name and version never contain "_"; arch may, so rejoin 3..NF.
       if (fn ~ /\.ipk$/) {
@@ -61,6 +72,7 @@ prune_one() {
       }
       # firmware image:  MM.DD-...  or  YYYYMMDD-...  ->  strip the leading date.
       if (fn ~ /\.img\.gz$/ || fn ~ /\.img$/ || fn ~ /\.bin$/) {
+        KIND = "fw"
         t = fn
         sub(/^[0-9][0-9]\.[0-9][0-9]-/, "", t)
         sub(/^[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]-/, "", t)
@@ -73,12 +85,15 @@ prune_one() {
       n = split(p, seg, "/"); fn = seg[n]
       dir = ""; for (i = 1; i < n; i++) dir = dir seg[i] "/"
       k = key(dir, fn); if (k == "") next
-      print k, mt, sz, p
+      print KIND, k, mt, sz, p
     }
-  ' "$lsf" \
-  | sort -t$'\t' -k1,1 -k2,2 -k4,4V \
+  ' "$lsf" > "$work/rows"
+
+  { awk -F'\t' '$1 == "pkg"' "$work/rows" | sort -t$'\t' -k2,2 -k5,5V
+    awk -F'\t' '$1 == "fw"'  "$work/rows" | sort -t$'\t' -k2,2 -k3,3 -k5,5V
+  } \
   | awk -F'\t' -v KEEP="$KEEP" '
-      { key[NR] = $1; size[NR] = $3; path[NR] = $4; cnt[$1]++ }
+      { key[NR] = $2; size[NR] = $4; path[NR] = $5; cnt[$2]++ }
       END {
         for (i = 1; i <= NR; i++) {
           seen[key[i]]++
