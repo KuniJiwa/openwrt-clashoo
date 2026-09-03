@@ -3048,6 +3048,13 @@ else if (type != '1') {
 return { error: 'not found' };
 }
 
+if (type == '2' || type == '3') {
+    let path1 = TEMPLATE_USER_DIR + '/' + name;
+    let path2 = TEMPLATE_DIR + '/' + name;
+    if (access(path1, 'r')) unlink(path1);
+    if (access(path2, 'r')) unlink(path2);
+}
+
 if (type == '1' && alt_target != target && access(alt_target, 'r')) {
 unlink(alt_target);
 unlink(alt_target + '.info');
