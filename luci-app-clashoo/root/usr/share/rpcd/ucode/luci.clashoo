@@ -3030,10 +3030,17 @@ let target = dir + '/' + name;
 let file_exists = !!access(target, 'r');
 let alt_name = name;
 let alt_target = target;
+let mirrored_template = null;
 
 if (type == '1' && match(name, /_new\.(yaml|yml)$/)) {
 alt_name = replace(name, /_new\.(yaml|yml)$/, '.yaml');
 alt_target = dir + '/' + alt_name;
+}
+
+if (type == '3' && file_exists) {
+let user_template = TEMPLATE_USER_DIR + '/' + name;
+if (access(user_template, 'r') && readfile(user_template) == readfile(target))
+mirrored_template = user_template;
 }
 
 if (file_exists) {
@@ -3048,12 +3055,8 @@ else if (type != '1') {
 return { error: 'not found' };
 }
 
-if (type == '2' || type == '3') {
-    let path1 = TEMPLATE_USER_DIR + '/' + name;
-    let path2 = TEMPLATE_DIR + '/' + name;
-    if (access(path1, 'r')) unlink(path1);
-    if (access(path2, 'r')) unlink(path2);
-}
+if (mirrored_template)
+unlink(mirrored_template);
 
 if (type == '1' && alt_target != target && access(alt_target, 'r')) {
 unlink(alt_target);
