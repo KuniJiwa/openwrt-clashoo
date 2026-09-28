@@ -105,7 +105,9 @@
 | `kmod-tun` | TUN 设备支持 |
 | `kmod-dummy` | dummy 网卡模块 |
 
-sing-box 二进制由用户按需安装，或通过「系统 → 内核下载」一键拉取。
+sing-box 内核通过 Clashoo 的「组件更新」下载到私有目录，不会覆盖系统的
+`/usr/bin/sing-box`，因此可与 HomeProxy 共装。两套插件仍不应同时接管透明代理；
+如需并行运行，请将 Clashoo 切到仅内核模式，并确保监听端口不冲突。
 
 ---
 
