@@ -1219,6 +1219,16 @@ if (!t) t = 'template';
 return '_merged_' + s + '__' + t + '.yaml';
 }
 
+function is_generated_yaml(path) {
+let fi = stat(path);
+if (!fi || fi.size > 524288) return false;
+let content = readfile(path) || '';
+for (let ln in split(content, '\n')) {
+if (match(ln, /^x-clashoo:/)) return true;
+}
+return false;
+}
+
 function template_search_dirs() {
 return [TEMPLATE_DIR, '/usr/share/clashoo/config/template'];
 }
@@ -2908,6 +2918,7 @@ for (let f in (glob(dir + '/*.yaml') || [])) {
 let name = replace(f, dir + '/', '');
 if (index(name, '_merged_') == 0 || seen[name]) continue;
 seen[name] = 1;
+if (is_generated_yaml(f)) continue;
 let fi = stat(f);
 push(files, { name, mtime: fi ? ('' + fi.mtime) : null, size: fi ? (int(fi.size / 1024) + ' KB') : null });
 }
@@ -2915,6 +2926,7 @@ for (let f in (glob(dir + '/*.yml') || [])) {
 let name = replace(f, dir + '/', '');
 if (index(name, '_merged_') == 0 || seen[name]) continue;
 seen[name] = 1;
+if (is_generated_yaml(f)) continue;
 let fi = stat(f);
 push(files, { name, mtime: fi ? ('' + fi.mtime) : null, size: fi ? (int(fi.size / 1024) + ' KB') : null });
 }
