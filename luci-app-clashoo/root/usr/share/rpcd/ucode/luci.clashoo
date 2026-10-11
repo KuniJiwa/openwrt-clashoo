@@ -2,8 +2,17 @@
 
 'use strict';
 
-import { access, popen, glob, readfile, writefile, stat, lstat, unlink, open, mkdtemp, rename, rmdir } from 'fs';
+import { access, popen, glob, readfile, writefile, stat, lstat, unlink, open, rename, rmdir } from 'fs';
 import { cursor } from 'uci';
+
+// 兼容 ucode < 2026-10-10：原生缺少 mkdtemp，改用 mktemp -d
+function mkdtemp(tpl) {
+	let p = popen("mktemp -d '" + tpl + "' 2>/dev/null");
+	if (!p) return null;
+	let r = trim(p.read('all') || '');
+	p.close();
+	return r || null;
+}
 
 const BINARY_PATHS = [
 '/usr/bin/mihomo-stable',
