@@ -3537,17 +3537,21 @@ return { success: false, error: 'missing_yq', message: '缺少 yq，无法注入
 		system("cp -f " + shell_quote(tmp_tpl) + " " + shell_quote(exploded));
 	}
 
+	/* 模板必须有 proxy-providers 段 */
+	if (system("yq -e 'has(\"proxy-providers\")' " + shell_quote(exploded) + " >/dev/null 2>&1") != 0) {
+		system("rm -f " + shell_quote(exploded));
+		return { success: false, error: 'no_proxy_providers', message: '模板缺少 proxy-providers 段' };
+	}
+
 	/* pairs 写到临时 JSON 文件 */
 	writefile(tmp_pairs, sprintf('%.J', pairs));
 
 	let tpl_label = match(tpl_src, /^https?:\/\//) ? tpl_src : replace(tpl_src, /^.*\//, "");
 
 	let yq_expr = '(load("' + tmp_pairs + '")) as $pairs | '
-		+ '(.["proxy-providers"] | keys) as $oldkeys | '
-		+ '($oldkeys | to_entries | map(.key as $i | .value as $k | {"key": $k, "value": ($pairs[$i].name // $k)}) | from_entries) as $ren | '
-		+ '($oldkeys | to_entries | map(select(.key < ($pairs | length)) | .key as $i | .value as $k | {"key": $k, "value": $pairs[$i].url}) | from_entries) as $reurl | '
-		+ '.["proxy-providers"] |= with_entries(.key as $old | .key = ($ren[$old] // $old) | .value.url = ($reurl[$old] // .value.url)) | '
-		+ '(.["proxy-groups"][] | select(has("use")) | .use) |= map($ren[.] // .) | '
+		+ '(.["proxy-providers"] | to_entries[0].value) as $tpl | '
+		+ '.["proxy-providers"] = ($pairs | map({"key": .name, "value": ($tpl + {"url": .url})}) | from_entries) | '
+		+ '(.["proxy-groups"][] | select(has("use")) | .use) = [$pairs[].name] | '
 		+ '."x-clashoo" = {"template": strenv(TPL_LABEL)}';
 
 	let inject_cmd = "TPL_LABEL=" + shell_quote(tpl_label)
