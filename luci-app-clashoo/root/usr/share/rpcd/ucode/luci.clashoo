@@ -1220,13 +1220,7 @@ return '_merged_' + s + '__' + t + '.yaml';
 }
 
 function is_generated_yaml(path) {
-let fi = stat(path);
-if (!fi || fi.size > 524288) return false;
-let content = readfile(path) || '';
-for (let ln in split(content, '\n')) {
-if (match(ln, /^x-clashoo:/)) return true;
-}
-return false;
+return system("grep -q '^x-clashoo:' " + shell_quote(path) + " 2>/dev/null") == 0;
 }
 
 function template_search_dirs() {
@@ -1238,7 +1232,7 @@ name = ensure_yaml_name(name || '');
 if (!name) return '';
 for (let dir in template_search_dirs()) {
 let p = dir + '/' + name;
-if (access(p, 'r')) return p;
+if (access(p, 'r') && !is_generated_yaml(p)) return p;
 }
 return '';
 }
@@ -2917,16 +2911,16 @@ for (let dir in template_search_dirs()) {
 for (let f in (glob(dir + '/*.yaml') || [])) {
 let name = replace(f, dir + '/', '');
 if (index(name, '_merged_') == 0 || seen[name]) continue;
-seen[name] = 1;
 if (is_generated_yaml(f)) continue;
+seen[name] = 1;
 let fi = stat(f);
 push(files, { name, mtime: fi ? ('' + fi.mtime) : null, size: fi ? (int(fi.size / 1024) + ' KB') : null });
 }
 for (let f in (glob(dir + '/*.yml') || [])) {
 let name = replace(f, dir + '/', '');
 if (index(name, '_merged_') == 0 || seen[name]) continue;
-seen[name] = 1;
 if (is_generated_yaml(f)) continue;
+seen[name] = 1;
 let fi = stat(f);
 push(files, { name, mtime: fi ? ('' + fi.mtime) : null, size: fi ? (int(fi.size / 1024) + ' KB') : null });
 }
@@ -3519,11 +3513,7 @@ if (system(dl_cmd) != 0 || !access(tmp_tpl, 'r'))
 return { success: false, error: 'download_failed', message: '远程模板下载失败' };
 } else {
 let safe = safe_name(tpl_src);
-let local_path = null;
-let search_dirs = template_search_dirs();
-for (let i = 0; i < length(search_dirs); i++) {
-if (access(search_dirs[i] + '/' + safe, 'r')) { local_path = search_dirs[i] + '/' + safe; break; }
-}
+let local_path = find_template_path(safe);
 if (!local_path)
 return { success: false, error: 'template_not_found', message: '本地模板文件不存在' };
 if (system('cp -f ' + shell_quote(local_path) + ' ' + shell_quote(tmp_tpl)) != 0)
