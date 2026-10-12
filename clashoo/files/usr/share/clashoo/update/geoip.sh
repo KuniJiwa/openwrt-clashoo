@@ -58,7 +58,7 @@ detect_proxy() {
 }
 
 _fetch() {
-	url="$1"; target="$2"; proxy="$3"
+	local url="$1" target="$2" proxy="$3"
 	if command -v curl >/dev/null 2>&1; then
 		if [ -n "$proxy" ]; then
 			curl --proxy "$proxy" -fsSL --connect-timeout 15 --max-time 120 -A "Clash/OpenWRT" "$url" -o "$target"
@@ -72,7 +72,7 @@ _fetch() {
 
 # 多源拉取：本机代理 → 国内镜像（gh-proxy / ghfast / jsdelivr）→ 原 URL 兜底
 download_to() {
-	url="$1"; target="$2"
+	local url="$1" target="$2" proxy
 	[ -z "$url" ] && return 1
 
 	proxy="$(detect_proxy)"
@@ -107,10 +107,10 @@ download_to() {
 }
 
 download_optional() {
-	url="$1"
-	target="$2"
-	name="$3"
-	tmp_target="${TMP_DIR}/$(basename "$target").tmp"
+	local url="$1"
+	local target="$2"
+	local name="$3"
+	local tmp_target="${TMP_DIR}/$(basename "$target").tmp"
 	if [ -z "$url" ]; then
 		log "$name skip (url empty)"
 		return 0
